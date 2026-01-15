@@ -4,6 +4,17 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
 
+  app: {
+    head: {
+      title: 'Anime Search Scan', // Optionnel : change le titre de l'onglet
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/anime.png' } 
+        // Assurez-vous que votre fichier s'appelle favicon.png 
+        // et qu'il est placé dans le dossier /public/
+      ]
+    }
+  },
+
   modules: [
     '@nuxt/eslint',
     '@nuxt/icon',

@@ -4,7 +4,7 @@
       <!-- Logo -->
       <NuxtLink to="/" class="header__logo">
         <span class="header__logo-text">Anime</span>
-        <span class="header__logo-accent">検索</span>
+        <span class="header__logo-accent">アニメ</span>
       </NuxtLink>
 
       <!-- Navigation -->
