@@ -21,10 +21,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           passphrase: ${{ secrets.VPS_SSH_PASSPHRASE }}
-          source: ".,!node_modules,!.git,!.nuxt,!.output"
+          source: "app,server,public,package.json,package-lock.json,nuxt.config.ts,tsconfig.json,Dockerfile,docker-compose.yml,.dockerignore"
           target: "/home/ubuntu/anime-search"
-          strip_components: 0
           overwrite: true
+          rm: true
 
       - name: Build and start containers
         uses: appleboy/ssh-action@v1.0.3
