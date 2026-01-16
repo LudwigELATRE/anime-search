@@ -118,7 +118,7 @@ async function loadAnimes() {
     .from('animes')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(30)
 
   if (data) {
     animes.value = data
