@@ -1,14 +1,9 @@
 import OpenAI from 'openai'
 import { serverSupabaseClient } from '#supabase/server'
+import type { Database } from '../../../types/database.types'
 
-interface AnimeInfo {
-  title: string
-  description: string
-  total_episodes: number
-  start_chapter: number
-  total_chapters: number
-  ongoing: boolean
-}
+type AnimeInsert = Database['public']['Tables']['animes']['Insert']
+type AnimeUpdate = Database['public']['Tables']['animes']['Update']
 
 export default defineEventHandler(async (event) => {
   const { query } = await readBody<{ query: string }>(event)
@@ -20,7 +15,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const supabase = await serverSupabaseClient(event)
+  const supabase = await serverSupabaseClient<Database>(event)
 
   // 1. Chercher d'abord en BDD
   const { data: existingAnimes } = await supabase
@@ -29,7 +24,18 @@ export default defineEventHandler(async (event) => {
     .ilike('title', `%${query}%`)
     .limit(10)
 
-  if (existingAnimes && existingAnimes.length > 0) {
+  // Vérifie si les données ont plus de 30 jours
+  const isExpired = (dateString: string | undefined): boolean => {
+    if (!dateString) return true; // Pas de date = considéré comme expiré
+    const createdDate = new Date(dateString);
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() - 30); // Il y a 30 jours
+    return createdDate < limitDate;
+  }
+
+  const createdAt = existingAnimes?.[0]?.created_at ?? undefined;
+
+  if (existingAnimes && existingAnimes.length > 0 && !isExpired(createdAt)) {
     return {
       source: 'database',
       animes: existingAnimes
@@ -72,7 +78,7 @@ IMPORTANT:
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
-
+    
     // Parser la réponse JSON
     let parsed
     try {
@@ -92,36 +98,54 @@ IMPORTANT:
       }
     }
 
-    const animeData: AnimeInfo = parsed.anime
+    const animeData: AnimeInsert = {
+      title: parsed.anime.title,
+      description: parsed.anime.description,
+      total_episodes: parsed.anime.total_episodes,
+      start_chapter: parsed.anime.start_chapter,
+      total_chapters: parsed.anime.total_chapters,
+      ongoing: parsed.anime.ongoing
+    }
 
-    // 3. Sauvegarder en BDD
-    const { data: newAnime, error } = await supabase
-      .from('animes')
-      .insert({
-        title: animeData.title,
+    // 3. Sauvegarder ou mettre à jour en BDD
+    const existingAnime = existingAnimes?.[0];
+
+    let newAnime;
+    let error;
+
+    if (existingAnime) {
+      // UPDATE si l'anime existe déjà (données expirées)
+      const updateData: AnimeUpdate = {
         description: animeData.description,
         total_episodes: animeData.total_episodes,
         start_chapter: animeData.start_chapter,
         total_chapters: animeData.total_chapters,
-        ongoing: animeData.ongoing
-      })
-      .select()
-      .single()
+        ongoing: animeData.ongoing,
+        created_at: new Date().toISOString()
+      }
+
+      const result = await supabase
+        .from('animes')
+        .update(updateData)
+        .eq('id', existingAnime.id)
+        .select()
+        .single();
+
+      newAnime = result.data;
+      error = result.error;
+    } else {
+      // INSERT si nouvel anime
+      const result = await supabase
+        .from('animes')
+        .insert(animeData)
+        .select()
+        .single();
+
+      newAnime = result.data;
+      error = result.error;
+    }
 
     if (error) {
-      // Si doublon, récupérer l'existant
-      if (error.code === '23505') {
-        const { data: existing } = await supabase
-          .from('animes')
-          .select('*')
-          .ilike('title', animeData.title)
-          .single()
-
-        return {
-          source: 'database',
-          animes: existing ? [existing] : []
-        }
-      }
       console.error('Supabase error:', error)
     }
 
