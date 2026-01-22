@@ -1,41 +1,38 @@
 import OpenAI from 'openai'
-import { serverSupabaseClient } from '#supabase/server'
+import { query, queryOne } from '../../utils/db'
 import type { Database } from '../../../types/database.types'
 
+type AnimeRow = Database['public']['Tables']['animes']['Row']
 type AnimeInsert = Database['public']['Tables']['animes']['Insert']
-type AnimeUpdate = Database['public']['Tables']['animes']['Update']
 
 export default defineEventHandler(async (event) => {
-  const { query } = await readBody<{ query: string }>(event)
+  const { query: searchQuery } = await readBody<{ query: string }>(event)
 
-  if (!query || query.trim().length < 2) {
+  if (!searchQuery || searchQuery.trim().length < 2) {
     throw createError({
       statusCode: 400,
       message: 'Query trop courte'
     })
   }
 
-  const supabase = await serverSupabaseClient<Database>(event)
-
   // 1. Chercher d'abord en BDD
-  const { data: existingAnimes } = await supabase
-    .from('animes')
-    .select('*')
-    .ilike('title', `%${query}%`)
-    .limit(10)
+  const existingAnimes = await query<AnimeRow>(
+    `SELECT * FROM animes WHERE title ILIKE $1 LIMIT 10`,
+    [`%${searchQuery}%`]
+  )
 
   // Vérifie si les données ont plus de 30 jours
-  const isExpired = (dateString: string | undefined): boolean => {
-    if (!dateString) return true; // Pas de date = considéré comme expiré
-    const createdDate = new Date(dateString);
-    const limitDate = new Date();
-    limitDate.setDate(limitDate.getDate() - 30); // Il y a 30 jours
-    return createdDate < limitDate;
+  const isExpired = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return true
+    const createdDate = new Date(dateString)
+    const limitDate = new Date()
+    limitDate.setDate(limitDate.getDate() - 30)
+    return createdDate < limitDate
   }
 
-  const createdAt = existingAnimes?.[0]?.created_at ?? undefined;
+  const createdAt = existingAnimes[0]?.created_at ?? undefined
 
-  if (existingAnimes && existingAnimes.length > 0 && !isExpired(createdAt)) {
+  if (existingAnimes.length > 0 && !isExpired(createdAt)) {
     return {
       source: 'database',
       animes: existingAnimes
@@ -48,7 +45,7 @@ export default defineEventHandler(async (event) => {
     apiKey: config.openaiApiKey
   })
 
-  const prompt = `Tu es un expert en anime et manga. L'utilisateur cherche des informations sur "${query}".
+  const prompt = `Tu es un expert en anime et manga. L'utilisateur cherche des informations sur "${searchQuery}".
 
 Réponds UNIQUEMENT en JSON valide avec ce format exact (pas de texte avant ou après):
 {
@@ -78,7 +75,7 @@ IMPORTANT:
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
-    
+
     // Parser la réponse JSON
     let parsed
     try {
@@ -94,7 +91,7 @@ IMPORTANT:
       return {
         source: 'ai',
         found: false,
-        message: `Aucun anime trouvé pour "${query}"`
+        message: `Aucun anime trouvé pour "${searchQuery}"`
       }
     }
 
@@ -108,45 +105,49 @@ IMPORTANT:
     }
 
     // 3. Sauvegarder ou mettre à jour en BDD
-    const existingAnime = existingAnimes?.[0];
+    const existingAnime = existingAnimes[0]
 
-    let newAnime;
-    let error;
+    let newAnime: AnimeRow | null = null
 
     if (existingAnime) {
       // UPDATE si l'anime existe déjà (données expirées)
-      const updateData: AnimeUpdate = {
-        description: animeData.description,
-        total_episodes: animeData.total_episodes,
-        start_chapter: animeData.start_chapter,
-        total_chapters: animeData.total_chapters,
-        ongoing: animeData.ongoing,
-        created_at: new Date().toISOString()
-      }
-
-      const result = await supabase
-        .from('animes')
-        .update(updateData)
-        .eq('id', existingAnime.id)
-        .select()
-        .single();
-
-      newAnime = result.data;
-      error = result.error;
+      newAnime = await queryOne<AnimeRow>(
+        `UPDATE animes
+         SET description = $1, total_episodes = $2, start_chapter = $3,
+             total_chapters = $4, ongoing = $5, created_at = NOW()
+         WHERE id = $6
+         RETURNING *`,
+        [
+          animeData.description,
+          animeData.total_episodes,
+          animeData.start_chapter,
+          animeData.total_chapters,
+          animeData.ongoing,
+          existingAnime.id
+        ]
+      )
     } else {
       // INSERT si nouvel anime
-      const result = await supabase
-        .from('animes')
-        .insert(animeData)
-        .select()
-        .single();
-
-      newAnime = result.data;
-      error = result.error;
-    }
-
-    if (error) {
-      console.error('Supabase error:', error)
+      newAnime = await queryOne<AnimeRow>(
+        `INSERT INTO animes (title, description, total_episodes, start_chapter, total_chapters, ongoing)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (title) DO UPDATE SET
+           description = EXCLUDED.description,
+           total_episodes = EXCLUDED.total_episodes,
+           start_chapter = EXCLUDED.start_chapter,
+           total_chapters = EXCLUDED.total_chapters,
+           ongoing = EXCLUDED.ongoing,
+           created_at = NOW()
+         RETURNING *`,
+        [
+          animeData.title,
+          animeData.description,
+          animeData.total_episodes,
+          animeData.start_chapter,
+          animeData.total_chapters,
+          animeData.ongoing
+        ]
+      )
     }
 
     return {

@@ -110,18 +110,14 @@ const searchMessage = ref('')
 const searchSource = ref<'database' | 'ai' | null>(null)
 
 // Charger les animes au démarrage
-const supabase = useSupabaseClient()
-
 async function loadAnimes() {
   isLoading.value = true
-  const { data } = await supabase
-    .from('animes')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(30)
-
-  if (data) {
-    animes.value = data
+  try {
+    const data = await $fetch<Anime[]>('/api/anime/list')
+    animes.value = data || []
+  } catch (error) {
+    console.error('Error loading animes:', error)
+    animes.value = []
   }
   isLoading.value = false
 }
