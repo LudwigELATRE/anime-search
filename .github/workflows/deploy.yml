@@ -21,7 +21,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           passphrase: ${{ secrets.VPS_SSH_PASSPHRASE }}
-          source: "app,server,public,package.json,package-lock.json,nuxt.config.ts,tsconfig.json,Dockerfile,docker-compose.yml,.dockerignore"
+          source: "app,server,public,docker,package.json,package-lock.json,nuxt.config.ts,tsconfig.json,Dockerfile,docker-compose.yml,.dockerignore"
           target: "/home/ubuntu/anime-search"
           overwrite: true
 
@@ -46,4 +46,9 @@ jobs:
             docker compose down
             docker compose build --no-cache
             docker compose up -d
+
+            # Wait for DB to be ready and run init script
+            sleep 10
+            docker compose exec -T db psql -U ${{ secrets.POSTGRES_USER }} -d ${{ secrets.POSTGRES_DB }} -f /docker-entrypoint-initdb.d/init.sql || true
+
             docker image prune -f
