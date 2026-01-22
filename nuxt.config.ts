@@ -8,8 +8,8 @@ export default defineNuxtConfig({
     head: {
       title: 'Anime Search Scan', // Optionnel : change le titre de l'onglet
       link: [
-        { rel: 'icon', type: 'image/png', href: '/anime.png' } 
-        // Assurez-vous que votre fichier s'appelle favicon.png 
+        { rel: 'icon', type: 'image/png', href: '/anime.png' }
+        // Assurez-vous que votre fichier s'appelle favicon.png
         // et qu'il est placé dans le dossier /public/
       ]
     }
@@ -19,16 +19,12 @@ export default defineNuxtConfig({
     '@nuxt/eslint',
     '@nuxt/icon',
     '@nuxt/fonts',
-    '@nuxt/ui',
-    '@nuxtjs/supabase'
+    '@nuxt/ui'
   ],
 
-  supabase: {
-    redirect: false // Pas de redirection auth
-  },
-
   runtimeConfig: {
-    openaiApiKey: process.env.OPENAI_API_KEY
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    databaseUrl: process.env.DATABASE_URL
   },
 
   // ========================================
