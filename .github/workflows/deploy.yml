@@ -22,10 +22,10 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           passphrase: ${{ secrets.VPS_SSH_PASSPHRASE }}
           script: |
-            rm -rf /home/ubuntu/anime-search/app
-            rm -rf /home/ubuntu/anime-search/server
-            rm -rf /home/ubuntu/anime-search/public
-            rm -rf /home/ubuntu/anime-search/docker
+            sudo rm -rf /home/ubuntu/anime-search/app
+            sudo rm -rf /home/ubuntu/anime-search/server
+            sudo rm -rf /home/ubuntu/anime-search/public
+            sudo rm -rf /home/ubuntu/anime-search/docker
 
       - name: Deploy to VPS
         uses: appleboy/scp-action@v0.1.7
